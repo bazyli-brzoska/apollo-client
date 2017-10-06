@@ -6,12 +6,37 @@ import { StoreValue, IdValue } from 'apollo-utilities';
 export type IdGetter = (value: Object) => string | null | undefined;
 
 /**
- * This is a normalized representation of the Apollo query result cache. It consists of
- * a flattened representation of query result trees.
+ * This is an interface used to access, set and remove
+ * StoreObjects from the cache
  */
 export interface NormalizedCache {
+  readonly [Symbol.toStringTag]: 'NormalizedCache';
+
+  get(dataId: string): StoreObject;
+  set(dataId: string, value: StoreObject): this;
+  delete(dataId: string): void;
+  forEach(
+    callback: (value: StoreObject, dataId: string, self: this) => void,
+  ): void;
+  clear(): void;
+
+  // non-Map elements:
+  /** returns an Object with key-value pairs matching the contents of the store */
+  toObject(): NormalizedCacheObject;
+}
+
+/**
+ * This is the default implementation of the normalized representation
+ * of the Apollo query result cache. It consists of
+ * a flattened representation of query result trees.
+ */
+export interface NormalizedCacheObject {
   [dataId: string]: StoreObject;
 }
+
+export type NormalizedCacheFactory = (
+  seed?: NormalizedCacheObject,
+) => NormalizedCache;
 
 export type OptimisticStoreItem = {
   id: string;
@@ -43,6 +68,7 @@ export type ApolloReducerConfig = {
   fragmentMatcher?: FragmentMatcher;
   addTypename?: boolean;
   customResolvers?: CustomResolverMap;
+  storeFactory?: NormalizedCacheFactory;
 };
 
 export type ReadStoreContext = {

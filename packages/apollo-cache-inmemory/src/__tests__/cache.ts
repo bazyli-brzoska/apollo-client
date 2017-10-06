@@ -508,7 +508,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           a: 1,
         },
@@ -524,7 +524,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           a: 1,
           b: 2,
@@ -543,7 +543,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           a: 4,
           b: 5,
@@ -567,7 +567,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           a: 1,
           d: {
@@ -595,7 +595,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           a: 1,
           d: {
@@ -643,7 +643,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           a: 1,
           b: 2,
@@ -692,7 +692,7 @@ describe('Cache', () => {
         },
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         ROOT_QUERY: {
           'field({"literal":true,"value":42})': 1,
           'field({"literal":false,"value":42})': 2,
@@ -796,7 +796,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           e: 4,
           h: {
@@ -824,7 +824,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           e: 4,
           f: 5,
@@ -852,7 +852,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           e: 4,
           f: 5,
@@ -881,7 +881,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           e: 4,
           f: 5,
@@ -929,7 +929,7 @@ describe('Cache', () => {
         fragmentName: 'fooFragment',
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           e: 4,
           f: 5,
@@ -971,7 +971,7 @@ describe('Cache', () => {
         fragmentName: 'barFragment',
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           e: 4,
           f: 5,
@@ -1014,7 +1014,7 @@ describe('Cache', () => {
         },
       });
 
-      expect((proxy as InMemoryCache).extract()).toEqual({
+      expect((proxy as InMemoryCache).extract().toObject()).toEqual({
         foo: {
           __typename: 'Foo',
           'field({"literal":true,"value":42})': 1,

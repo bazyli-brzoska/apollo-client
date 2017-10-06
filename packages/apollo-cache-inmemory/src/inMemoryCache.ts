@@ -12,6 +12,9 @@ import {
   OptimisticStoreItem,
   ApolloReducerConfig,
   NormalizedCache,
+  NormalizedCacheObject,
+  NormalizedCacheFactory,
+  StoreObject,
 } from './types';
 import { writeResultToStore } from './writeToStore';
 import { readQueryFromStore, diffQueryAgainstStore } from './readFromStore';
@@ -20,6 +23,7 @@ const defaultConfig: ApolloReducerConfig = {
   fragmentMatcher: new HeuristicFragmentMatcher().match,
   dataIdFromObject: defaultDataIdFromObject,
   addTypename: true,
+  storeFactory: defaultNormalizedCacheFactory,
 };
 
 export function defaultDataIdFromObject(result: any): string | null {
@@ -34,8 +38,67 @@ export function defaultDataIdFromObject(result: any): string | null {
   return null;
 }
 
+export class ObjectBasedCache implements NormalizedCache {
+  get [Symbol.toStringTag](): 'NormalizedCache' {
+    return 'NormalizedCache';
+  }
+
+  constructor(private _data: NormalizedCacheObject = {}) {}
+
+  public toObject(): NormalizedCacheObject {
+    return this._data;
+  }
+
+  public get(dataId: string): StoreObject {
+    return this._data[dataId];
+  }
+
+  public set(dataId: string, value: StoreObject): this {
+    this._data[dataId] = value;
+    return this;
+  }
+
+  public delete(dataId: string): boolean {
+    const keyExisted = this._data.hasOwnProperty(dataId);
+    delete this._data[dataId];
+    return keyExisted;
+  }
+
+  public clear(): void {
+    this._data = {};
+  }
+
+  public forEach(
+    callback: (value: StoreObject, dataId: string, self: this) => void,
+  ) {
+    Object.keys(this._data).forEach(dataId =>
+      callback(this._data[dataId], dataId, this),
+    );
+  }
+}
+
+export function defaultNormalizedCacheFactory(seed?: NormalizedCacheObject) {
+  return new ObjectBasedCache(seed) as NormalizedCache;
+}
+
+export function isNormalizedCacheImplementation(
+  store: NormalizedCache | NormalizedCacheObject,
+): store is NormalizedCache {
+  return (store as NormalizedCache)[Symbol.toStringTag] === 'NormalizedCache';
+}
+
+export function ensureNormalizedCache({
+  store,
+  storeFactory = defaultNormalizedCacheFactory,
+}: {
+  store: NormalizedCache | NormalizedCacheObject;
+  storeFactory: NormalizedCacheFactory;
+}) {
+  return isNormalizedCacheImplementation(store) ? store : storeFactory(store);
+}
+
 export class InMemoryCache extends ApolloCache<NormalizedCache> {
-  private data: NormalizedCache = {};
+  private data: NormalizedCache;
   private config: ApolloReducerConfig;
   private optimistic: OptimisticStoreItem[] = [];
   private watches: Cache.WatchOptions[] = [];
@@ -45,24 +108,32 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
     super();
     this.config = { ...defaultConfig, ...config };
     this.addTypename = this.config.addTypename ? true : false;
+    this.data = this.config.storeFactory();
   }
 
-  public restore(data: NormalizedCache): ApolloCache<NormalizedCache> {
-    if (data) this.data = data;
+  public restore(data: NormalizedCache | NormalizedCacheObject): this {
+    if (data) {
+      this.data = ensureNormalizedCache({
+        store: data,
+        storeFactory: this.config.storeFactory,
+      });
+    }
     return this;
   }
 
   public extract(optimistic: boolean = false): NormalizedCache {
     if (optimistic && this.optimistic.length > 0) {
-      const patches = this.optimistic.map(opt => opt.data);
-      return Object.assign({}, this.data, ...patches) as NormalizedCache;
+      const patches = this.optimistic.map(opt => opt.data.toObject());
+      return this.config.storeFactory(
+        Object.assign({}, this.data.toObject(), ...patches),
+      );
     }
 
     return this.data;
   }
 
   public read<T>(query: Cache.ReadOptions): Cache.DiffResult<T> {
-    if (query.rootId && typeof this.data[query.rootId] === 'undefined') {
+    if (query.rootId && typeof this.data.get(query.rootId) === 'undefined') {
       return null;
     }
 
@@ -116,7 +187,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
   }
 
   public reset(): Promise<void> {
-    this.data = {};
+    this.data.clear();
     this.broadcastWatches();
 
     return Promise.resolve();
@@ -148,16 +219,16 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
     const before = this.extract(true);
 
     const orig = this.data;
-    this.data = { ...before };
+    this.data = before;
     transaction(this);
     const after = this.data;
     this.data = orig;
 
-    const patch: any = {};
+    const patch = this.config.storeFactory();
 
-    Object.keys(after).forEach(key => {
-      if (after[key] !== before[key]) {
-        patch[key] = after[key];
+    after.forEach((afterKey, key) => {
+      if (afterKey !== before.get(key)) {
+        patch.set(key, afterKey);
       }
     });
 

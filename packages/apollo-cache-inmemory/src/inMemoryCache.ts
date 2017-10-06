@@ -1,6 +1,13 @@
 import { DocumentNode } from 'graphql';
 
-import { Cache, DataProxy, ApolloCache, Transaction } from 'apollo-cache';
+import {
+  Cache,
+  DataProxy,
+  ApolloCache,
+  Transaction,
+  NormalizedCacheObject,
+  StoreObject,
+} from 'apollo-cache';
 
 import {
   getFragmentQueryDocument,
@@ -12,9 +19,7 @@ import {
   OptimisticStoreItem,
   ApolloReducerConfig,
   NormalizedCache,
-  NormalizedCacheObject,
   NormalizedCacheFactory,
-  StoreObject,
 } from './types';
 import { writeResultToStore } from './writeToStore';
 import { readQueryFromStore, diffQueryAgainstStore } from './readFromStore';
@@ -43,42 +48,66 @@ export class ObjectBasedCache implements NormalizedCache {
     return 'NormalizedCache';
   }
 
-  constructor(private _data: NormalizedCacheObject = {}) {}
+  private _patches: Array<NormalizedCache> | undefined;
+
+  constructor(
+    private _data: NormalizedCacheObject = {},
+    patches?: Array<NormalizedCache> | undefined,
+  ) {
+    if (patches) {
+      this._patches = patches.length > 0 ? patches : undefined;
+    }
+  }
 
   public toObject(): NormalizedCacheObject {
-    return this._data;
+    return this._patches && this._patches.length > 0
+      ? Object.assign(
+          {},
+          this._data,
+          ...this._patches.map(patchCache => patchCache.toObject()),
+        )
+      : this._data;
+  }
+
+  public overlay(...patches: Array<NormalizedCache>): ObjectBasedCache {
+    return new ObjectBasedCache(this._data, patches);
   }
 
   public get(dataId: string): StoreObject {
-    return this._data[dataId];
+    return this._patches ? this.toObject()[dataId] : this._data[dataId];
   }
 
   public set(dataId: string, value: StoreObject): this {
+    // NOTE: any overlay cache will still take precendence over this
     this._data[dataId] = value;
     return this;
   }
 
   public delete(dataId: string): boolean {
     const keyExisted = this._data.hasOwnProperty(dataId);
+    // NOTE: any overlay cache will still take precendence over this
     delete this._data[dataId];
+    // keyExisted is here only for Map compatibility
     return keyExisted;
   }
 
   public clear(): void {
     this._data = {};
+    this._patches = undefined;
   }
 
   public forEach(
     callback: (value: StoreObject, dataId: string, self: this) => void,
   ) {
-    Object.keys(this._data).forEach(dataId =>
-      callback(this._data[dataId], dataId, this),
-    );
+    const data = this.toObject();
+    Object.keys(data).forEach(dataId => callback(data[dataId], dataId, this));
   }
 }
 
-export function defaultNormalizedCacheFactory(seed?: NormalizedCacheObject) {
-  return new ObjectBasedCache(seed) as NormalizedCache;
+export function defaultNormalizedCacheFactory(
+  seed?: NormalizedCacheObject,
+): NormalizedCache {
+  return new ObjectBasedCache(seed);
 }
 
 export function isNormalizedCacheImplementation(
@@ -93,11 +122,11 @@ export function ensureNormalizedCache({
 }: {
   store: NormalizedCache | NormalizedCacheObject;
   storeFactory: NormalizedCacheFactory;
-}) {
+}): NormalizedCache {
   return isNormalizedCacheImplementation(store) ? store : storeFactory(store);
 }
 
-export class InMemoryCache extends ApolloCache<NormalizedCache> {
+export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   private data: NormalizedCache;
   private config: ApolloReducerConfig;
   private optimistic: OptimisticStoreItem[] = [];
@@ -121,15 +150,22 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
     return this;
   }
 
-  public extract(optimistic: boolean = false): NormalizedCache {
+  public extract(optimistic: boolean, serializable: false): NormalizedCache;
+  public extract(
+    optimistic: boolean,
+    serializable?: true,
+  ): NormalizedCacheObject;
+  public extract(
+    optimistic: boolean = false,
+    serializable: boolean = true,
+  ): NormalizedCacheObject | NormalizedCache {
+    let data = this.data;
     if (optimistic && this.optimistic.length > 0) {
-      const patches = this.optimistic.map(opt => opt.data.toObject());
-      return this.config.storeFactory(
-        Object.assign({}, this.data.toObject(), ...patches),
-      );
+      const patches = this.optimistic.map(opt => opt.data);
+      data = this.data.overlay(...patches);
     }
 
-    return this.data;
+    return serializable ? data.toObject() : data;
   }
 
   public read<T>(query: Cache.ReadOptions): Cache.DiffResult<T> {
@@ -138,7 +174,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
     }
 
     return readQueryFromStore({
-      store: this.extract(query.optimistic),
+      store: this.extract(query.optimistic, false),
       query: this.transformDocument(query.query),
       variables: query.variables,
       rootId: query.rootId,
@@ -164,7 +200,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
 
   public diff<T>(query: Cache.DiffOptions): Cache.DiffResult<T> {
     return diffQueryAgainstStore({
-      store: this.extract(query.optimistic),
+      store: this.extract(query.optimistic, false),
       query: this.transformDocument(query.query),
       variables: query.variables,
       returnPartialData: query.returnPartialData,
@@ -207,16 +243,16 @@ export class InMemoryCache extends ApolloCache<NormalizedCache> {
     this.broadcastWatches();
   }
 
-  public performTransaction(transaction: Transaction<NormalizedCache>) {
+  public performTransaction(transaction: Transaction<NormalizedCacheObject>) {
     // TODO: does this need to be different, or is this okay for an in-memory cache?
     transaction(this);
   }
 
   public recordOptimisticTransaction(
-    transaction: Transaction<NormalizedCache>,
+    transaction: Transaction<NormalizedCacheObject>,
     id: string,
   ) {
-    const before = this.extract(true);
+    const before = this.extract(true, false);
 
     const orig = this.data;
     this.data = before;

@@ -1419,6 +1419,7 @@ describe('optimistic mutation results', () => {
           const dataInStore = (client.queryManager.dataStore.getCache() as InMemoryCache).extract(
             true,
           );
+          debugger;
           expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
           expect((dataInStore['Todo99'] as any).text).toBe(
             'Optimistically generated',
@@ -1533,6 +1534,7 @@ describe('optimistic mutation results', () => {
           const dataInStore = (client.queryManager.dataStore.getCache() as InMemoryCache).extract(
             true,
           );
+
           expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
           expect((dataInStore['Todo99'] as any).text).toBe(
             'Optimistically generated',

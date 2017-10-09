@@ -8,7 +8,7 @@ export interface NormalizedCache {
   readonly [Symbol.toStringTag]: 'NormalizedCache';
 
   get(dataId: string): StoreObject;
-  set(dataId: string, value: StoreObject): this;
+  set(dataId: string, value: StoreObject): void;
   delete(dataId: string): void;
   clear(): void;
 
@@ -21,7 +21,7 @@ export interface NormalizedCache {
    * returns a NormalizedCache which passes-through overlay values if they exist,
    * otherwise refers to the underlying store
    */
-  overlay(...patches: Array<NormalizedCache>): NormalizedCache;
+  overlay(...patches: Array<NormalizedCacheObject>): NormalizedCache;
   /**
    * capture all changes to the store during the execution of transaction
    */

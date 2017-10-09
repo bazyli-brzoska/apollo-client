@@ -52,58 +52,51 @@ export class ObjectBasedCache implements NormalizedCache {
 
   constructor(
     private data: NormalizedCacheObject = {},
-    private patches?: Array<NormalizedCache> | undefined,
+    private overlayData?: NormalizedCacheObject | undefined,
     private nestedRecording: boolean = false,
-  ) {
-    if (patches) {
-      this.patches = patches.length > 0 ? patches : undefined;
-    }
-  }
+  ) {}
 
   public toObject(): NormalizedCacheObject {
     if (this.recordedData) return this.recordedData;
-    return this.patches
-      ? Object.assign(
-          {},
-          this.data,
-          ...this.patches.map(patchCache => patchCache.toObject()),
-        )
-      : this.data;
+    if (this.overlayData) return { ...this.data, ...this.overlayData };
+    return this.data;
   }
 
-  public overlay(...patches: Array<NormalizedCache>): ObjectBasedCache {
-    const allPatches = this.patches ? this.patches.concat(patches) : patches;
+  public overlay(...patches: Array<NormalizedCacheObject>): ObjectBasedCache {
     return new ObjectBasedCache(
       this.recordedData || this.data,
-      allPatches,
+      this.overlayData
+        ? Object.assign({}, this.overlayData, ...patches)
+        : Object.assign({}, ...patches),
       this.nestedRecording || !!this.recordedData,
     );
   }
 
   public get(dataId: string): StoreObject {
     if (this.recordedData) {
+      // recording always takes precedence:
       return this.recordedData[dataId];
     }
-    return this.patches ? this.toObject()[dataId] : this.data[dataId];
+    if (this.overlayData && this.overlayData[dataId] !== undefined) {
+      return this.overlayData[dataId];
+    }
+    return this.data[dataId];
   }
 
-  public set(dataId: string, value: StoreObject): this {
+  public set(dataId: string, value: StoreObject) {
     if (this.recordedData) {
       this.recordedData[dataId] = value;
     } else {
-      // NOTE: any overlay cache will still take precendence over this
       this.data[dataId] = value;
+      if (this.overlayData && this.overlayData[dataId] !== undefined) {
+        // we do not want the overlay to take precedence anymore:
+        this.overlayData[dataId] = undefined;
+      }
     }
-    return this;
   }
 
   public delete(dataId: string): void {
-    if (this.recordedData) {
-      this.recordedData[dataId] = undefined;
-    } else {
-      // NOTE: any overlay cache will still take precendence over this
-      delete this.data[dataId];
-    }
+    this.set(dataId, undefined);
   }
 
   public clear(): void {
@@ -113,20 +106,23 @@ export class ObjectBasedCache implements NormalizedCache {
       );
     } else {
       if (this.nestedRecording) {
+        // we want to keep all the current keys, so that the parent Object.assign will still erase them
+        // this is not a very likely scenario
         Object.keys(this.data).forEach(key => {
           this.data[key] = undefined;
         });
       } else {
+        // since this is the root store, so we do can reset the reference to the original data Object
         this.data = {};
       }
-      this.patches = undefined;
+      this.overlayData = undefined;
     }
   }
 
   public record(transaction: () => void): NormalizedCacheObject {
-    this.recordedData = {};
+    const recordedData = {};
+    this.recordedData = recordedData;
     transaction();
-    const recordedData = this.recordedData!;
     this.recordedData = undefined;
     if (this.nestedRecording) {
       // we want this nested recording to be persisted in the parent recording too
@@ -201,7 +197,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   }
 
   public read<T>(query: Cache.ReadOptions): Cache.DiffResult<T> {
-    if (query.rootId && typeof this.data.get(query.rootId) === 'undefined') {
+    if (query.rootId && this.data.get(query.rootId) === undefined) {
       return null;
     }
 
@@ -284,9 +280,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     transaction: Transaction<NormalizedCacheObject>,
     id: string,
   ) {
-    const patch = this.config.storeFactory(
-      this.data.record(() => transaction(this)),
-    );
+    const patch = this.data.record(() => transaction(this));
 
     this.optimistic.push({
       id,

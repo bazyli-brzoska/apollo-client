@@ -20,7 +20,7 @@ export type NormalizedCacheFactory = (
 
 export type OptimisticStoreItem = {
   id: string;
-  data: NormalizedCache;
+  data: NormalizedCacheObject;
   transaction: Transaction<NormalizedCacheObject>;
 };
 

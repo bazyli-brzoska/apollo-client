@@ -48,59 +48,91 @@ export class ObjectBasedCache implements NormalizedCache {
     return 'NormalizedCache';
   }
 
-  private _patches: Array<NormalizedCache> | undefined;
+  private recordedData: NormalizedCacheObject | undefined;
 
   constructor(
-    private _data: NormalizedCacheObject = {},
-    patches?: Array<NormalizedCache> | undefined,
+    private data: NormalizedCacheObject = {},
+    private patches?: Array<NormalizedCache> | undefined,
+    private nestedRecording: boolean = false,
   ) {
     if (patches) {
-      this._patches = patches.length > 0 ? patches : undefined;
+      this.patches = patches.length > 0 ? patches : undefined;
     }
   }
 
   public toObject(): NormalizedCacheObject {
-    return this._patches && this._patches.length > 0
+    if (this.recordedData) return this.recordedData;
+    return this.patches
       ? Object.assign(
           {},
-          this._data,
-          ...this._patches.map(patchCache => patchCache.toObject()),
+          this.data,
+          ...this.patches.map(patchCache => patchCache.toObject()),
         )
-      : this._data;
+      : this.data;
   }
 
   public overlay(...patches: Array<NormalizedCache>): ObjectBasedCache {
-    return new ObjectBasedCache(this._data, patches);
+    const allPatches = this.patches ? this.patches.concat(patches) : patches;
+    return new ObjectBasedCache(
+      this.recordedData || this.data,
+      allPatches,
+      this.nestedRecording || !!this.recordedData,
+    );
   }
 
   public get(dataId: string): StoreObject {
-    return this._patches ? this.toObject()[dataId] : this._data[dataId];
+    if (this.recordedData) {
+      return this.recordedData[dataId];
+    }
+    return this.patches ? this.toObject()[dataId] : this.data[dataId];
   }
 
   public set(dataId: string, value: StoreObject): this {
-    // NOTE: any overlay cache will still take precendence over this
-    this._data[dataId] = value;
+    if (this.recordedData) {
+      this.recordedData[dataId] = value;
+    } else {
+      // NOTE: any overlay cache will still take precendence over this
+      this.data[dataId] = value;
+    }
     return this;
   }
 
-  public delete(dataId: string): boolean {
-    const keyExisted = this._data.hasOwnProperty(dataId);
-    // NOTE: any overlay cache will still take precendence over this
-    delete this._data[dataId];
-    // keyExisted is here only for Map compatibility
-    return keyExisted;
+  public delete(dataId: string): void {
+    if (this.recordedData) {
+      this.recordedData[dataId] = undefined;
+    } else {
+      // NOTE: any overlay cache will still take precendence over this
+      delete this.data[dataId];
+    }
   }
 
   public clear(): void {
-    this._data = {};
-    this._patches = undefined;
+    if (this.recordedData) {
+      throw new Error(
+        'Clearing the cache while recording a transaction is not possible',
+      );
+    } else {
+      if (this.nestedRecording) {
+        Object.keys(this.data).forEach(key => {
+          this.data[key] = undefined;
+        });
+      } else {
+        this.data = {};
+      }
+      this.patches = undefined;
+    }
   }
 
-  public forEach(
-    callback: (value: StoreObject, dataId: string, self: this) => void,
-  ) {
-    const data = this.toObject();
-    Object.keys(data).forEach(dataId => callback(data[dataId], dataId, this));
+  public record(transaction: () => void): NormalizedCacheObject {
+    this.recordedData = {};
+    transaction();
+    const recordedData = this.recordedData!;
+    this.recordedData = undefined;
+    if (this.nestedRecording) {
+      // we want this nested recording to be persisted in the parent recording too
+      Object.assign(this.data, recordedData);
+    }
+    return recordedData;
   }
 }
 
@@ -152,7 +184,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
 
   public extract(optimistic: boolean, serializable: false): NormalizedCache;
   public extract(
-    optimistic: boolean,
+    optimistic?: boolean,
     serializable?: true,
   ): NormalizedCacheObject;
   public extract(
@@ -252,21 +284,9 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     transaction: Transaction<NormalizedCacheObject>,
     id: string,
   ) {
-    const before = this.extract(true, false);
-
-    const orig = this.data;
-    this.data = before;
-    transaction(this);
-    const after = this.data;
-    this.data = orig;
-
-    const patch = this.config.storeFactory();
-
-    after.forEach((afterKey, key) => {
-      if (afterKey !== before.get(key)) {
-        patch.set(key, afterKey);
-      }
-    });
+    const patch = this.config.storeFactory(
+      this.data.record(() => transaction(this)),
+    );
 
     this.optimistic.push({
       id,

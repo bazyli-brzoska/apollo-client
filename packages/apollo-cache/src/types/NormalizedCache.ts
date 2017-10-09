@@ -9,10 +9,7 @@ export interface NormalizedCache {
 
   get(dataId: string): StoreObject;
   set(dataId: string, value: StoreObject): this;
-  delete(dataId: string): boolean;
-  forEach(
-    callback: (value: StoreObject, dataId: string, self: this) => void,
-  ): void;
+  delete(dataId: string): void;
   clear(): void;
 
   // non-Map elements:
@@ -25,6 +22,10 @@ export interface NormalizedCache {
    * otherwise refers to the underlying store
    */
   overlay(...patches: Array<NormalizedCache>): NormalizedCache;
+  /**
+   * capture all changes to the store during the execution of transaction
+   */
+  record(transaction: () => void): NormalizedCacheObject;
 }
 
 /**

@@ -53,7 +53,6 @@ export class ObjectBasedCache implements NormalizedCache {
   constructor(
     private data: NormalizedCacheObject = {},
     private overlayData?: NormalizedCacheObject | undefined,
-    private nestedRecording: boolean = false,
   ) {}
 
   public toObject(): NormalizedCacheObject {
@@ -68,7 +67,6 @@ export class ObjectBasedCache implements NormalizedCache {
       this.overlayData
         ? Object.assign({}, this.overlayData, ...patches)
         : Object.assign({}, ...patches),
-      this.nestedRecording || !!this.recordedData,
     );
   }
 
@@ -105,29 +103,18 @@ export class ObjectBasedCache implements NormalizedCache {
         'Clearing the cache while recording a transaction is not possible',
       );
     } else {
-      if (this.nestedRecording) {
-        // we want to keep all the current keys, so that the parent Object.assign will still erase them
-        // this is not a very likely scenario
-        Object.keys(this.data).forEach(key => {
-          this.data[key] = undefined;
-        });
-      } else {
-        // since this is the root store, so we do can reset the reference to the original data Object
-        this.data = {};
-      }
+      // since this is the root store, so we do can reset the reference to the original data Object
+      this.data = {};
       this.overlayData = undefined;
     }
   }
 
   public record(transaction: () => void): NormalizedCacheObject {
+    const previousRecording = this.recordedData;
     const recordedData = {};
     this.recordedData = recordedData;
     transaction();
-    this.recordedData = undefined;
-    if (this.nestedRecording) {
-      // we want this nested recording to be persisted in the parent recording too
-      Object.assign(this.data, recordedData);
-    }
+    this.recordedData = previousRecording;
     return recordedData;
   }
 }

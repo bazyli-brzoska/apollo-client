@@ -24,7 +24,7 @@ export abstract class ApolloCache<TSerialized> implements DataProxy {
    * and also (potentially) during hot reloads.
    */
   public abstract restore(
-    serializedStateOrCacheInstance: TSerialized | NormalizedCache,
+    serializedState: TSerialized,
   ): ApolloCache<TSerialized>;
 
   /**

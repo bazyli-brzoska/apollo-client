@@ -23,6 +23,10 @@ export interface NormalizedCache {
    */
   overlay(...patches: Array<NormalizedCacheObject>): NormalizedCache;
   /**
+   * replace the state of the store
+   */
+  replace(newData: NormalizedCacheObject): void;
+  /**
    * capture all changes to the store during the execution of transaction
    */
   record(

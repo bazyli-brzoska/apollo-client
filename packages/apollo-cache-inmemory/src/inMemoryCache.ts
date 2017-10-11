@@ -93,6 +93,14 @@ export class ObjectBasedCache implements NormalizedCache {
     }
   }
 
+  public replace(newData: NormalizedCacheObject): void {
+    if (this.recordedData) {
+      this.recordedData = newData;
+    } else {
+      this.data = newData;
+    }
+  }
+
   public record(
     transaction: () => void,
     data: NormalizedCacheObject = {
@@ -155,12 +163,9 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     this.data = this.config.storeFactory();
   }
 
-  public restore(data: NormalizedCache | NormalizedCacheObject): this {
+  public restore(data: NormalizedCacheObject): this {
     if (data) {
-      this.data = ensureNormalizedCache({
-        store: data,
-        storeFactory: this.config.storeFactory,
-      });
+      this.data.replace(data);
     }
     return this;
   }

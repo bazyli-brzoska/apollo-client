@@ -10,7 +10,7 @@ describe('ObjectBasedCache', () => {
   it('should create a cache based on an Object', () => {
     const contents: NormalizedCacheObject = { a: {} };
     const cache = new ObjectBasedCache(contents);
-    expect(cache.toObject()).toBe(contents);
+    expect(cache.toObject()).toEqual(contents);
   });
 
   it(`should .get() an object from the store by dataId`, () => {
@@ -84,25 +84,68 @@ describe('ObjectBasedCache', () => {
       expect(overlay.get('Human')).toBe(otherData.Human);
     });
 
-    it('should record changes during a transaction', () => {
+    describe('recording changes during a transaction', () => {
       const data = {
         Human: { __typename: 'Human', name: 'Mark' },
         Animal: { __typename: 'Mouse', name: '🐭' },
       };
-      const cache = new ObjectBasedCache({ ...data });
       const dataToRecord = { Human: { __typename: 'Human', name: 'John' } };
-      const recording = cache.record(() => {
-        expect(cache.get('Human')).toBeUndefined();
-        cache.set('Human', dataToRecord.Human);
-        expect(cache.get('Human')).toBe(dataToRecord.Human);
-        expect(cache.get('Animal')).toBeUndefined();
-        cache.delete('Animal');
+      let cache: ObjectBasedCache;
+      beforeEach(() => {
+        cache = new ObjectBasedCache({ ...data });
       });
-      expect(recording).toEqual({
-        Human: dataToRecord.Human,
+
+      it('should passthrough values if not defined in recording', () => {
+        cache.record(() => {
+          expect(cache.get('Human')).toBe(data.Human);
+          expect(cache.get('Animal')).toBe(data.Animal);
+        });
       });
-      // original data remains unaffected:
-      expect(cache.toObject()).toEqual(data);
+
+      it('should return values defined during recording', () => {
+        cache.record(() => {
+          cache.set('Human', dataToRecord.Human);
+          expect(cache.get('Human')).toBe(dataToRecord.Human);
+        });
+      });
+
+      it('should return undefined for values deleted during recording', () => {
+        cache.record(() => {
+          // delete should be registered in the recording:
+          cache.delete('Animal');
+          expect(cache.get('Animal')).toBeUndefined();
+        });
+      });
+    });
+
+    describe('result of a recorded transaction', () => {
+      const data = {
+        Human: { __typename: 'Human', name: 'Mark' },
+        Animal: { __typename: 'Mouse', name: '🐭' },
+      };
+      const dataToRecord = { Human: { __typename: 'Human', name: 'John' } };
+      let cache: ObjectBasedCache;
+      let recording: NormalizedCacheObject;
+      beforeEach(() => {
+        cache = new ObjectBasedCache({ ...data });
+        recording = cache.record(() => {
+          cache.set('Human', dataToRecord.Human);
+          cache.delete('Animal');
+        });
+      });
+
+      it('should contain the property indicating deletion', () => {
+        expect(recording).toHaveProperty('Animal');
+      });
+      it('should have recorded the changes made during recording', () => {
+        expect(recording).toEqual({
+          Human: dataToRecord.Human,
+          Animal: undefined,
+        });
+      });
+      it('should keep the original data unaffected', () => {
+        expect(cache.toObject()).toEqual(data);
+      });
     });
 
     it('should record changes during a nested transaction', () => {
@@ -117,12 +160,15 @@ describe('ObjectBasedCache', () => {
         Animal: { __typename: 'Chick', name: '🐣' },
       };
       const recording = cache.record(() => {
-        expect(cache.get('Human')).toBeUndefined();
+        expect(cache.get('Human')).toBe(data.Human);
         cache.set('Human', dataToRecord.Human);
         expect(cache.get('Human')).toBe(dataToRecord.Human);
 
         const nestedRecording = cache.record(() => {
-          expect(cache.get('Human')).toBeUndefined();
+          // passthrough from parent recording:
+          expect(cache.get('Human')).toBe(dataToRecord.Human);
+          // and from main store:
+          expect(cache.get('Animal')).toBe(data.Animal);
           cache.set('Human', nestedDataToRecord.Human);
           expect(cache.get('Human')).toBe(nestedDataToRecord.Human);
           cache.set('Animal', nestedDataToRecord.Animal);
@@ -131,12 +177,13 @@ describe('ObjectBasedCache', () => {
 
         // nested recording shouldn't propagate state to the parent recording:
         expect(cache.get('Human')).toBe(dataToRecord.Human);
-        expect(cache.get('Animal')).toBeUndefined();
+        expect(cache.get('Animal')).toBe(data.Animal);
       });
 
       expect(recording).toEqual({
         Human: dataToRecord.Human,
       });
+      expect(recording).not.toHaveProperty('Animal');
       // original data remains unaffected:
       expect(cache.toObject()).toEqual(data);
     });

@@ -43,41 +43,57 @@ export function defaultDataIdFromObject(result: any): string | null {
   return null;
 }
 
+// export class RecordingCache implements NormalizedCache {
+//   get [Symbol.toStringTag](): 'NormalizedCache' {
+//     return 'NormalizedCache';
+//   }
+
+//   private overlayData: NormalizedCacheObject = {};
+
+//   constructor(
+//     private baseData: NormalizedCacheObject = {},
+//   ) {}
+// }
+
 export class ObjectBasedCache implements NormalizedCache {
   get [Symbol.toStringTag](): 'NormalizedCache' {
     return 'NormalizedCache';
   }
 
-  private recordedData: NormalizedCacheObject | undefined;
-
   constructor(
     private data: NormalizedCacheObject = {},
-    private overlayData?: NormalizedCacheObject | undefined,
+    // private overlayData?: NormalizedCacheObject | undefined,
+    private recordedData?: NormalizedCacheObject | undefined,
   ) {}
 
   public toObject(): NormalizedCacheObject {
-    if (this.recordedData) return this.recordedData;
-    if (this.overlayData) return { ...this.data, ...this.overlayData };
-    return this.data;
+    // if (this.recordedData) return { ...this.recordedData };
+    // if (this.overlayData || this.recordedData) {
+    return {
+      ...this.data,
+      // ...this.overlayData,
+      ...this.recordedData,
+    };
+    // }
+    // return this.data;
   }
 
   public overlay(...patches: Array<NormalizedCacheObject>): ObjectBasedCache {
     return new ObjectBasedCache(
-      this.recordedData || this.data,
-      this.overlayData
-        ? Object.assign({}, this.overlayData, ...patches)
-        : Object.assign({}, ...patches),
+      // this.data,
+      // Object.assign({}, this.overlayData, this.recordedData, ...patches),
+      Object.assign(this.toObject(), ...patches),
     );
   }
 
   public get(dataId: string): StoreObject {
-    if (this.recordedData) {
+    if (this.recordedData && this.recordedData.hasOwnProperty(dataId)) {
       // recording always takes precedence:
       return this.recordedData[dataId];
     }
-    if (this.overlayData && this.overlayData[dataId] !== undefined) {
-      return this.overlayData[dataId];
-    }
+    // if (this.overlayData && this.overlayData[dataId] !== undefined) {
+    //   return this.overlayData[dataId];
+    // }
     return this.data[dataId];
   }
 
@@ -86,10 +102,10 @@ export class ObjectBasedCache implements NormalizedCache {
       this.recordedData[dataId] = value;
     } else {
       this.data[dataId] = value;
-      if (this.overlayData && this.overlayData[dataId] !== undefined) {
-        // we do not want the overlay to take precedence anymore:
-        this.overlayData[dataId] = undefined;
-      }
+      // if (this.overlayData && this.overlayData[dataId] !== undefined) {
+      //   // we do not want the overlay to take precedence anymore:
+      //   this.overlayData[dataId] = undefined;
+      // }
     }
   }
 
@@ -105,16 +121,45 @@ export class ObjectBasedCache implements NormalizedCache {
     } else {
       // since this is the root store, so we do can reset the reference to the original data Object
       this.data = {};
-      this.overlayData = undefined;
+      // this.overlayData = undefined;
     }
   }
 
-  public record(transaction: () => void): NormalizedCacheObject {
-    const previousRecording = this.recordedData;
-    const recordedData = {};
-    this.recordedData = recordedData;
+  public record(
+    transaction: () => void,
+    overlay?: NormalizedCacheObject,
+  ): NormalizedCacheObject {
+    const {
+      data: parentData,
+      // overlayData: parentOverlayData,
+      recordedData: parentRecordedData,
+    } = this;
+
+    this.data = {
+      ...parentData,
+      // ...parentOverlayData,
+      ...parentRecordedData,
+      ...overlay,
+    };
+    // this.overlayData = undefined;
+    // setup the recording:
+    const recordedData = (this.recordedData = {});
+    // }
+    // const recordedData = {};
+    // this.recordedData = recordedData;
+    // this.overlayData = undefined;
     transaction();
-    this.recordedData = previousRecording;
+    // restore the data state:
+    this.data = parentData;
+    // restore the recording:
+    this.recordedData = parentRecordedData;
+    // this.overlayData = parentOverlayData;
+
+    // this.recordedData = previousRecording;
+    // // if (previousRecording) {
+    //   this.data = data;
+    //   this.overlayData = origOverlay;
+    //   // }
     return recordedData;
   }
 }
@@ -148,6 +193,10 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   private watches: Cache.WatchOptions[] = [];
   private addTypename: boolean;
 
+  get optimisticPatches(): NormalizedCacheObject[] {
+    return this.optimistic.map(opt => opt.data);
+  }
+
   constructor(config: ApolloReducerConfig = {}) {
     super();
     this.config = { ...defaultConfig, ...config };
@@ -174,11 +223,10 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     optimistic: boolean = false,
     serializable: boolean = true,
   ): NormalizedCacheObject | NormalizedCache {
-    let data = this.data;
-    if (optimistic && this.optimistic.length > 0) {
-      const patches = this.optimistic.map(opt => opt.data);
-      data = this.data.overlay(...patches);
-    }
+    const data =
+      optimistic && this.optimistic.length > 0
+        ? this.data.overlay(...this.optimisticPatches)
+        : this.data;
 
     return serializable ? data.toObject() : data;
   }
@@ -267,7 +315,26 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     transaction: Transaction<NormalizedCacheObject>,
     id: string,
   ) {
-    const patch = this.data.record(() => transaction(this));
+    // const dataWithCurrrentOptimisticUpdates = this.extract(true, false);
+
+    // const orig = this.data;
+    // this.data = this.config.storeFactory({ ...before });
+    // transaction(this);
+    // const after = this.data.toObject();
+    // this.data = orig;
+
+    // const patch: any = {};
+
+    // Object.keys(after).forEach(key => {
+    //   if (after[key] !== before[key]) {
+    //     patch[key] = after[key];
+    //   }
+    // });
+
+    const patch = this.data.record(
+      () => transaction(this),
+      Object.assign({}, ...this.optimisticPatches),
+    );
 
     this.optimistic.push({
       id,

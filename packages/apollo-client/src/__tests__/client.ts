@@ -1035,7 +1035,7 @@ describe('client', () => {
       typeCondition: string,
       context: any,
     ): boolean => {
-      const obj = context.store[idValue.id];
+      const obj = context.store.get(idValue.id);
 
       if (!obj) {
         return false;

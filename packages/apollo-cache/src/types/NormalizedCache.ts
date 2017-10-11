@@ -25,7 +25,10 @@ export interface NormalizedCache {
   /**
    * capture all changes to the store during the execution of transaction
    */
-  record(transaction: () => void): NormalizedCacheObject;
+  record(
+    transaction: () => void,
+    overlay?: NormalizedCacheObject,
+  ): NormalizedCacheObject;
 }
 
 /**

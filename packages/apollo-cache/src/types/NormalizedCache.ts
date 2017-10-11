@@ -27,7 +27,7 @@ export interface NormalizedCache {
    */
   record(
     transaction: () => void,
-    overlay?: NormalizedCacheObject,
+    data?: NormalizedCacheObject,
   ): NormalizedCacheObject;
 }
 

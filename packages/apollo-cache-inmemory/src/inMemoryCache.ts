@@ -91,12 +91,10 @@ export class RecordingCache implements NormalizedCache {
   public record(
     transaction: (recordingCache: RecordingCache) => void,
   ): NormalizedCacheObject {
-    const previousRecording = this.recordedData;
-    this.recordedData = {};
     transaction(this);
-    const thisRecording = this.recordedData;
-    this.recordedData = previousRecording;
-    return thisRecording;
+    const recordedData = this.recordedData;
+    this.recordedData = {};
+    return recordedData;
   }
 
   public get(dataId: string): StoreObject {

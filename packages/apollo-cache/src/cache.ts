@@ -1,7 +1,7 @@
 import { DocumentNode } from 'graphql';
 import { getFragmentQueryDocument } from 'apollo-utilities';
 
-import { DataProxy, Cache, NormalizedCache } from './types';
+import { DataProxy, Cache } from './types';
 
 export type Transaction<T> = (c: ApolloCache<T>) => void;
 
@@ -30,18 +30,7 @@ export abstract class ApolloCache<TSerialized> implements DataProxy {
   /**
    * Exposes the cache's complete state, in a serializable format for later restoration.
    */
-  public abstract extract(
-    optimistic?: boolean,
-    serializable?: false,
-  ): NormalizedCache;
-  public abstract extract(
-    optimistic: boolean,
-    serializable?: true,
-  ): TSerialized;
-  public abstract extract(
-    optimistic?: boolean,
-    serializable?: boolean,
-  ): TSerialized | NormalizedCache;
+  public abstract extract(optimistic?: boolean): TSerialized;
 
   // optimistic API
   public abstract removeOptimistic(id: string): void;

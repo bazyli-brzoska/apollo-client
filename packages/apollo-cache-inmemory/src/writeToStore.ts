@@ -26,10 +26,7 @@ import {
   getQueryDefinition,
 } from 'apollo-utilities';
 
-import {
-  defaultNormalizedCacheFactory,
-  ObjectBasedCache,
-} from './inMemoryCache';
+import { defaultNormalizedCacheFactory, SimpleCache } from './inMemoryCache';
 
 import {
   IdGetter,
@@ -249,9 +246,9 @@ export function writeSelectionSetToStore({
         // on the context.
         const idValue: IdValue = { type: 'id', id: 'self', generated: false };
         const fakeContext: ReadStoreContext = {
-          // NOTE: fakeContext always uses ObjectBaseCache
+          // NOTE: fakeContext always uses SimpleCache
           // since this is only to ensure the return value of 'matches'
-          store: new ObjectBasedCache({ self: result }),
+          store: new SimpleCache({ self: result }),
           returnPartialData: false,
           hasMissingField: false,
           customResolvers: {},

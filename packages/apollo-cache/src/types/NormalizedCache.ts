@@ -18,21 +18,9 @@ export interface NormalizedCache {
    */
   toObject(): NormalizedCacheObject;
   /**
-   * returns a NormalizedCache which passes-through overlay values if they exist,
-   * otherwise refers to the underlying store
-   */
-  overlay(...patches: Array<NormalizedCacheObject>): NormalizedCache;
-  /**
    * replace the state of the store
    */
   replace(newData: NormalizedCacheObject): void;
-  /**
-   * capture all changes to the store during the execution of transaction
-   */
-  record(
-    transaction: () => void,
-    data?: NormalizedCacheObject,
-  ): NormalizedCacheObject;
 }
 
 /**

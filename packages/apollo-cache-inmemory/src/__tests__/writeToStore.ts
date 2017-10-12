@@ -1425,7 +1425,7 @@ describe('writing to the store', () => {
     const newStore = writeQueryToStore({
       query,
       result: cloneDeep(result),
-      store: defaultNormalizedCacheFactory(assign({}, store.toObject())),
+      store: defaultNormalizedCacheFactory(store.toObject()),
     });
 
     Object.keys(store.toObject()).forEach(field => {

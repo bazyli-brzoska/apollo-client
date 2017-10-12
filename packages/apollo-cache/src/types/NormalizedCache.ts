@@ -5,8 +5,6 @@ import { StoreValue } from 'apollo-utilities';
  * StoreObjects from the cache
  */
 export interface NormalizedCache {
-  readonly [Symbol.toStringTag]: 'NormalizedCache';
-
   get(dataId: string): StoreObject;
   set(dataId: string, value: StoreObject): void;
   delete(dataId: string): void;

@@ -43,9 +43,6 @@ export function defaultDataIdFromObject(result: any): string | null {
 }
 
 export class SimpleCache implements NormalizedCache {
-  get [Symbol.toStringTag](): 'NormalizedCache' {
-    return 'NormalizedCache';
-  }
   constructor(private data: NormalizedCacheObject = {}) {}
   public toObject(): NormalizedCacheObject {
     return { ...this.data };
@@ -76,17 +73,9 @@ export function record(
 }
 
 export class RecordingCache implements NormalizedCache {
-  get [Symbol.toStringTag](): 'NormalizedCache' {
-    return 'NormalizedCache';
-  }
-
-  private recordedData: NormalizedCacheObject = {};
-
   constructor(private readonly data: NormalizedCacheObject = {}) {}
 
-  public toObject(): NormalizedCacheObject {
-    return { ...this.data, ...this.recordedData };
-  }
+  private recordedData: NormalizedCacheObject = {};
 
   public record(
     transaction: (recordingCache: RecordingCache) => void,
@@ -95,6 +84,10 @@ export class RecordingCache implements NormalizedCache {
     const recordedData = this.recordedData;
     this.recordedData = {};
     return recordedData;
+  }
+
+  public toObject(): NormalizedCacheObject {
+    return { ...this.data, ...this.recordedData };
   }
 
   public get(dataId: string): StoreObject {
@@ -147,19 +140,17 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   }
 
   public restore(data: NormalizedCacheObject): this {
-    if (data) {
-      this.data.replace(data);
-    }
+    if (data) this.data.replace(data);
     return this;
   }
 
   public extract(optimistic: boolean = false): NormalizedCacheObject {
-    return optimistic && this.optimistic.length > 0
-      ? Object.assign(
-          this.data.toObject(),
-          ...this.optimistic.map(opt => opt.data),
-        )
-      : this.data.toObject();
+    if (optimistic && this.optimistic.length > 0) {
+      const patches = this.optimistic.map(opt => opt.data);
+      return Object.assign(this.data.toObject(), ...patches);
+    }
+
+    return this.data.toObject();
   }
 
   public read<T>(query: Cache.ReadOptions): Cache.DiffResult<T> {
